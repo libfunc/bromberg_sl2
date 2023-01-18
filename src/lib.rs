@@ -96,7 +96,7 @@ pub use digest::{
     Update,
 };
 
-pub use crate::hash_matrix::{constmatmul, DigestString, HashMatrix};
+pub use crate::hash_matrix::{constmatmul, HashMatrix};
 
 use crate::lookup_table::{BYTE_LOOKUPS, WYDE_LOOKUPS};
 
