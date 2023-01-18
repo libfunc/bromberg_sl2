@@ -33,6 +33,19 @@ impl ToBigUint for U256 {
 pub struct HashMatrix(u128, u128, u128, u128);
 
 impl HashMatrix {
+    pub fn from_hex(hex: &str) -> Result<Self, String> {
+        if !hex.is_ascii() || hex.len() != 128 {
+            return Err(format!("invalid hex string: {:?}", hex));
+        }
+
+        let hex_bytes = hex.as_bytes();
+        let a = hex_bytes_to_u128(&hex_bytes[..32])?;
+        let b = hex_bytes_to_u128(&hex_bytes[32..64])?;
+        let c = hex_bytes_to_u128(&hex_bytes[64..96])?;
+        let d = hex_bytes_to_u128(&hex_bytes[96..])?;
+        Ok(Self(a, b, c, d))
+    }
+
     #[must_use]
     #[inline]
     pub(crate) fn generic_array_digest(&self) -> generic_array::GenericArray<u8, U64> {
@@ -90,20 +103,11 @@ impl Mul for HashMatrix {
     }
 }
 
-pub(crate) const A: HashMatrix = HashMatrix(
-    1, 2,
-    0, 1,
-);
+pub(crate) const A: HashMatrix = HashMatrix(1, 2, 0, 1);
 
-pub(crate) const B: HashMatrix = HashMatrix(
-    1, 0,
-    2, 1,
-);
+pub(crate) const B: HashMatrix = HashMatrix(1, 0, 2, 1);
 
-pub static I: HashMatrix = HashMatrix(
-    1, 0,
-    0, 1,
-);
+pub static I: HashMatrix = HashMatrix(1, 0, 0, 1);
 
 const SUCC_P: u128 = 1 << 127;
 const P: u128 = SUCC_P - 1;
@@ -226,10 +230,31 @@ pub const fn constmatmul(a: HashMatrix, b: HashMatrix) -> HashMatrix {
     )
 }
 
+fn hex_bytes_to_u128(hex_bytes: &[u8]) -> Result<u128, String> {
+    let mut hex_bytes = hex_bytes.iter().copied();
+    let mut result = [0u8; 16];
+    for byte in result.iter_mut() {
+        let digit1 = hex_digit_to_u8(hex_bytes.next().unwrap())?;
+        let digit2 = hex_digit_to_u8(hex_bytes.next().unwrap())?;
+        *byte = (digit1 << 4) | digit2;
+    }
+    Ok(u128::from_be_bytes(result))
+}
+
+fn hex_digit_to_u8(hex_digit: u8) -> Result<u8, String> {
+    match hex_digit {
+        b'A'..=b'F' => Ok(hex_digit - b'A' + 10),
+        b'a'..=b'f' => Ok(hex_digit - b'a' + 10),
+        b'0'..=b'9' => Ok(hex_digit - b'0'),
+        _ => Err(format!("invalid hex character: {:?}", hex_digit)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::*;
+
     #[test]
     fn it_works() {
         assert_eq!(mul(1 << 127, 2), U256(1, 0));
@@ -285,6 +310,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_hex_encoding_and_decoding() {
+        let hash = HashMatrix(0, 0, 0, 0);
+        assert_eq!(HashMatrix::from_hex(&hash.to_hex()).unwrap(), hash);
+
+        let hash = HashMatrix(0, 0, 0, 1);
+        assert_eq!(HashMatrix::from_hex(&hash.to_hex()).unwrap(), hash);
+
+        let hash = HashMatrix(0, 0, 0, 31);
+        assert_eq!(HashMatrix::from_hex(&hash.to_hex()).unwrap(), hash);
+
+        let hash = HashMatrix(0, 0, 0, 89);
+        assert_eq!(HashMatrix::from_hex(&hash.to_hex()).unwrap(), hash);
+
+        let hash = HashMatrix(0, 0, 0, 1 << 34);
+        assert_eq!(HashMatrix::from_hex(&hash.to_hex()).unwrap(), hash);
+
+        let hash = HashMatrix(0, 1 << 31, 0, 1 << 34);
+        assert_eq!(HashMatrix::from_hex(&hash.to_hex()).unwrap(), hash);
+    }
+
     use quickcheck::*;
 
     quickcheck! {
@@ -294,6 +340,13 @@ mod tests {
             let h1 = hash(&a) * hash(&b);
             a.append(&mut b);
             hash(&a) == h1
+        }
+    }
+
+    quickcheck! {
+        fn hex_encoding_and_decoding(bytes: Vec<u8>) -> bool {
+            let hash = hash(&bytes);
+            HashMatrix::from_hex(&hash.to_hex()).unwrap() == hash
         }
     }
 
