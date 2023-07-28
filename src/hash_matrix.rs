@@ -2,6 +2,7 @@ use alloc::string::String;
 use core::fmt::Debug;
 use core::ops::Mul;
 use digest::{consts::U64, generic_array};
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use alloc::vec::Vec;
@@ -29,7 +30,7 @@ impl ToBigUint for U256 {
 /// [`BrombergHashable`](trait.BrombergHashable.html)
 /// instances, since not all 512-bit sequences are valid hashes
 /// (in fact, fewer than 1/4 of them will be valid).
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct HashMatrix(u128, u128, u128, u128);
 
 impl HashMatrix {
