@@ -1,6 +1,8 @@
+use std::sync::OnceLock;
+
 use crate::hash_matrix::{constmatmul, HashMatrix, A, B};
+#[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use lazy_static::lazy_static;
 use seq_macro::seq;
 
 const BIT_LOOKUPS: [HashMatrix; 2] = [B, A];
@@ -40,14 +42,15 @@ pub(crate) static BYTE_LOOKUPS: [HashMatrix; 256] = seq!(N in 0..256 {
     ]
 });
 
-lazy_static! {
-    pub(crate) static ref WYDE_LOOKUPS: Vec<HashMatrix> = {
-        let mut l = Vec::with_capacity(65536);
-        let mut i: u32 = 0;
-        while i < 65536 {
-            l.push(mul_from_wyde(i as u16));
-            i += 1;
-        }
-        l
-    };
+// 4_194_304 = 4mb
+pub(crate) static WYDE_LOOKUPS: OnceLock<Vec<HashMatrix>> = OnceLock::new();
+
+pub(crate) fn init_wyde_lookups() -> Vec<HashMatrix> {
+    let mut l = Vec::with_capacity(65536);
+    let mut i: u32 = 0;
+    while i < 65536 {
+        l.push(mul_from_wyde(i as u16));
+        i += 1;
+    }
+    l
 }

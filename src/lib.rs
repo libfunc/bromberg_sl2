@@ -85,25 +85,36 @@ from ["Hashing with SL₂"
 none of them fulfill these desiderata.
 */
 
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
 extern crate alloc;
 
 // Re-export digest traits
 pub use digest::{
-    self, generic_array::GenericArray, Digest, DynDigest, FixedOutput, FixedOutputDirty, Reset,
-    Update,
+    consts::U64, generic_array::GenericArray, Digest, DynDigest, FixedOutput, Reset, Update,
 };
 
 pub use crate::hash_matrix::{constmatmul, HashMatrix};
 
-use crate::lookup_table::{BYTE_LOOKUPS, WYDE_LOOKUPS};
+use crate::lookup_table::{init_wyde_lookups, BYTE_LOOKUPS, WYDE_LOOKUPS};
 
 pub use crate::hash_matrix::I;
 
 mod hash_matrix;
 mod lookup_table;
+
+#[inline]
+fn get_val(acc: HashMatrix, bs: &[u8]) -> HashMatrix {
+    if bs.len() == 2 {
+        let index = ((bs[0] as usize) << 8) | (bs[1] as usize);
+        let wyde_lookups = WYDE_LOOKUPS.get_or_init(init_wyde_lookups);
+        let value = wyde_lookups[index];
+        acc * value
+    } else {
+        acc * BYTE_LOOKUPS[bs[0] as usize]
+    }
+}
 
 /// The main export of this library: Give me a byte
 /// stream and I'll give you a hash.
@@ -112,11 +123,7 @@ mod lookup_table;
 pub fn hash(bytes: &[u8]) -> HashMatrix {
     let mut acc = I;
     for bs in bytes.chunks(2) {
-        if bs.len() == 2 {
-            acc = acc * WYDE_LOOKUPS[(((bs[0] as usize) << 8) | (bs[1] as usize))];
-        } else {
-            acc = acc * BYTE_LOOKUPS[bs[0] as usize];
-        }
+        acc = get_val(acc, bs);
     }
     acc
 }
@@ -131,25 +138,13 @@ pub fn hash(bytes: &[u8]) -> HashMatrix {
 pub fn hash_par(bytes: &[u8]) -> HashMatrix {
     use rayon::prelude::*;
 
-    bytes
-        .par_chunks(2)
-        .fold(
-            || I,
-            |acc, bs| {
-                if bs.len() == 2 {
-                    acc * WYDE_LOOKUPS[(((bs[0] as usize) << 8) | (bs[1] as usize))]
-                } else {
-                    acc * BYTE_LOOKUPS[bs[0] as usize]
-                }
-            },
-        )
-        .reduce(
-            || I,
-            |mut acc, h| {
-                acc = acc * h;
-                acc
-            },
-        )
+    bytes.par_chunks(2).fold(|| I, get_val).reduce(
+        || I,
+        |mut acc, h| {
+            acc = acc * h;
+            acc
+        },
+    )
 }
 
 /// This procedure implements the same hash function as `hash()`, but
@@ -212,8 +207,8 @@ impl<T: BrombergHashable> BrombergHashable for alloc::rc::Rc<T> {
 }
 
 impl Update for HashMatrix {
-    fn update(&mut self, data: impl AsRef<[u8]>) {
-        *self = *self * data.as_ref().bromberg_hash();
+    fn update(&mut self, data: &[u8]) {
+        *self = *self * data.bromberg_hash();
     }
 }
 
@@ -223,10 +218,9 @@ impl Reset for HashMatrix {
     }
 }
 
-impl FixedOutputDirty for HashMatrix {
-    type OutputSize = digest::consts::U64;
-
-    fn finalize_into_dirty(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
-        *out = self.generic_array_digest();
-    }
-}
+// impl FixedOutputDirty for HashMatrix {
+//     type OutputSize = U64;
+//     fn finalize_into_dirty(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
+//         *out = self.generic_array_digest();
+//     }
+// }

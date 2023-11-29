@@ -1,7 +1,8 @@
+#[cfg(not(feature = "std"))]
 use alloc::string::String;
+#[cfg(not(feature = "std"))]
 use core::fmt::Debug;
 use core::ops::Mul;
-use digest::{consts::U64, generic_array};
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -48,16 +49,17 @@ impl HashMatrix {
         Ok(Self(a, b, c, d))
     }
 
-    #[must_use]
-    #[inline]
-    pub(crate) fn generic_array_digest(&self) -> generic_array::GenericArray<u8, U64> {
-        digest::generic_array::GenericArray::from_exact_iter(
-            [self.0, self.1, self.2, self.3]
-                .iter()
-                .flat_map(|x| x.to_be_bytes()),
-        )
-        .unwrap()
-    }
+    // #[must_use]
+    // #[inline]
+    // pub(crate) fn generic_array_digest(&self) -> generic_array::GenericArray<u8, U64> {
+    //     use digest::{consts::U64, generic_array};
+    //     digest::generic_array::GenericArray::from_exact_iter(
+    //         [self.0, self.1, self.2, self.3]
+    //             .iter()
+    //             .flat_map(|x| x.to_be_bytes()),
+    //     )
+    //     .unwrap()
+    // }
 
     /// Produce a hex digest of the hash. This will be a 128 hex digits.
     #[inline]
