@@ -99,16 +99,19 @@ pub use crate::hash_matrix::I;
 mod hash_matrix;
 mod lookup_table;
 
-#[inline]
-fn get_val(acc: HashMatrix, bs: &[u8]) -> HashMatrix {
-    if bs.len() == 2 {
-        let index = ((bs[0] as usize) << 8) | (bs[1] as usize);
-        let wyde_lookups = WYDE_LOOKUPS.get_or_init(init_wyde_lookups);
-        let value = wyde_lookups[index];
-        acc * value
-    } else {
-        acc * BYTE_LOOKUPS[bs[0] as usize]
-    }
+#[inline(always)]
+fn get_val_for_two(acc: HashMatrix, bs: &[u8], wyde_lookups: &[HashMatrix]) -> HashMatrix {
+    let b0 = unsafe { *bs.get_unchecked(0) };
+    let b1 = unsafe { *bs.get_unchecked(1) };
+    let index = ((b0 as usize) << 8) | (b1 as usize);
+    // let i = u16::from_be_bytes([b0, b1]) as usize;
+    let value = unsafe { *wyde_lookups.get_unchecked(index) };
+    acc * value
+}
+
+#[inline(always)]
+fn get_val_for_one(acc: HashMatrix, bs: u8) -> HashMatrix {
+    acc * unsafe { *BYTE_LOOKUPS.get_unchecked(bs as usize) }
 }
 
 /// The main export of this library: Give me a byte
@@ -116,11 +119,21 @@ fn get_val(acc: HashMatrix, bs: &[u8]) -> HashMatrix {
 #[must_use]
 #[inline]
 pub fn hash(bytes: &[u8]) -> HashMatrix {
+    let wyde_lookups = WYDE_LOOKUPS.get_or_init(init_wyde_lookups);
+
     let mut acc = I;
-    for bs in bytes.chunks(2) {
-        acc = get_val(acc, bs);
+    let iter = bytes.chunks_exact(2);
+    let rem = iter.remainder();
+
+    for bs in iter {
+        acc = get_val_for_two(acc, bs, &wyde_lookups);
     }
-    acc
+
+    if rem.is_empty() {
+        acc
+    } else {
+        get_val_for_one(acc, unsafe { *rem.get_unchecked(0) })
+    }
 }
 
 #[must_use]
@@ -133,13 +146,26 @@ pub fn hash(bytes: &[u8]) -> HashMatrix {
 pub fn hash_par(bytes: &[u8]) -> HashMatrix {
     use rayon::prelude::*;
 
-    bytes.par_chunks(2).fold(|| I, get_val).reduce(
-        || I,
-        |mut acc, h| {
-            acc = acc * h;
-            acc
-        },
-    )
+    let wyde_lookups = WYDE_LOOKUPS.get_or_init(init_wyde_lookups);
+
+    let iter = bytes.par_chunks_exact(2);
+    let rem = iter.remainder();
+
+    let acc = iter
+        .fold(|| I, |acc, bs| get_val_for_two(acc, bs, &wyde_lookups))
+        .reduce(
+            || I,
+            |mut acc, h| {
+                acc = acc * h;
+                acc
+            },
+        );
+
+    if rem.is_empty() {
+        acc
+    } else {
+        get_val_for_one(acc, unsafe { *rem.get_unchecked(0) })
+    }
 }
 
 /// This procedure implements the same hash function as `hash()`, but
@@ -156,7 +182,7 @@ pub fn hash_par(bytes: &[u8]) -> HashMatrix {
 pub fn hash_strict(bytes: &[u8]) -> HashMatrix {
     let mut acc = I;
     for b in bytes {
-        acc = acc * BYTE_LOOKUPS[*b as usize];
+        acc = acc * unsafe { *BYTE_LOOKUPS.get_unchecked(*b as usize) };
     }
     acc
 }

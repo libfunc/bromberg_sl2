@@ -4,9 +4,6 @@ use alloc::string::String;
 use core::fmt::Debug;
 use core::ops::Mul;
 
-#[cfg(test)]
-use alloc::vec::Vec;
-
 #[derive(PartialEq, Eq, Debug)]
 // big-end first; does this matter?
 // TODO try using u64s or u32s instead for performance.
@@ -67,6 +64,17 @@ impl HashMatrix {
         result[48..].copy_from_slice(&self.3.to_be_bytes());
         result
     }
+
+    #[must_use]
+    #[inline]
+    pub fn to_le_bytes(&self) -> [u8; 64] {
+        let mut result = [0u8; 64];
+        result[..16].copy_from_slice(&self.0.to_le_bytes());
+        result[16..32].copy_from_slice(&self.1.to_le_bytes());
+        result[32..48].copy_from_slice(&self.2.to_le_bytes());
+        result[48..].copy_from_slice(&self.3.to_le_bytes());
+        result
+    }
 }
 
 impl Default for HashMatrix {
@@ -92,24 +100,31 @@ pub static I: HashMatrix = HashMatrix(1, 0, 0, 1);
 const SUCC_P: u128 = 1 << 127;
 const P: u128 = SUCC_P - 1;
 
+const LO_MASK: u128 = 0xffff_ffff_ffff_ffff;
+
 #[inline]
 const fn mul(x: u128, y: u128) -> U256 {
-    // this could probably be made much faster, though I'm not sure.
-    let x_lo = x & 0xffff_ffff_ffff_ffff;
-    let y_lo = y & 0xffff_ffff_ffff_ffff;
+    let x_lo = x & LO_MASK;
+    let y_lo = y & LO_MASK;
 
     let x_hi = x >> 64;
     let y_hi = y >> 64;
 
-    let x_hi_y_lo = x_hi * y_lo;
-    let y_hi_x_lo = y_hi * x_lo;
+    let x_hi_y_lo = x_hi.wrapping_mul(y_lo);
+    let y_hi_x_lo = y_hi.wrapping_mul(x_lo);
 
-    let (lo_sum_1, carry_bool_1) = (x_hi_y_lo << 64).overflowing_add(y_hi_x_lo << 64);
-    let (lo_sum_2, carry_bool_2) = lo_sum_1.overflowing_add(x_lo * y_lo);
+    let x_hi_y_lo_shifted = x_hi_y_lo << 64;
+    let y_hi_x_lo_shifted = y_hi_x_lo << 64;
+
+    let (lo_sum_1, carry_bool_1) = x_hi_y_lo_shifted.overflowing_add(y_hi_x_lo_shifted);
+    let (lo_sum_2, carry_bool_2) = lo_sum_1.overflowing_add(x_lo.wrapping_mul(y_lo));
     let carry = carry_bool_1 as u128 + carry_bool_2 as u128;
 
     U256(
-        (x_hi * y_hi) + (x_hi_y_lo >> 64) + (y_hi_x_lo >> 64) + carry,
+        x_hi.wrapping_mul(y_hi)
+            .wrapping_add(x_hi_y_lo_shifted >> 64)
+            .wrapping_add(y_hi_x_lo_shifted >> 64)
+            .wrapping_add(carry),
         lo_sum_2,
     )
 }
@@ -234,6 +249,8 @@ fn hex_digit_to_u8(hex_digit: u8) -> Result<u8, String> {
 mod tests {
     use super::*;
     use crate::*;
+
+    use alloc::vec::Vec;
 
     #[test]
     fn it_works() {
