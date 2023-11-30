@@ -3,7 +3,6 @@ use alloc::string::String;
 #[cfg(not(feature = "std"))]
 use core::fmt::Debug;
 use core::ops::Mul;
-use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 use alloc::vec::Vec;
@@ -31,7 +30,7 @@ impl ToBigUint for U256 {
 /// [`BrombergHashable`](trait.BrombergHashable.html)
 /// instances, since not all 512-bit sequences are valid hashes
 /// (in fact, fewer than 1/4 of them will be valid).
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct HashMatrix(u128, u128, u128, u128);
 
 impl HashMatrix {
@@ -49,18 +48,6 @@ impl HashMatrix {
         Ok(Self(a, b, c, d))
     }
 
-    // #[must_use]
-    // #[inline]
-    // pub(crate) fn generic_array_digest(&self) -> generic_array::GenericArray<u8, U64> {
-    //     use digest::{consts::U64, generic_array};
-    //     digest::generic_array::GenericArray::from_exact_iter(
-    //         [self.0, self.1, self.2, self.3]
-    //             .iter()
-    //             .flat_map(|x| x.to_be_bytes()),
-    //     )
-    //     .unwrap()
-    // }
-
     /// Produce a hex digest of the hash. This will be a 128 hex digits.
     #[inline]
     pub fn to_hex(self) -> String {
@@ -68,6 +55,17 @@ impl HashMatrix {
             "{:032x}{:032x}{:032x}{:032x}",
             self.0, self.1, self.2, self.3
         )
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn to_be_bytes(&self) -> [u8; 64] {
+        let mut result = [0u8; 64];
+        result[..16].copy_from_slice(&self.0.to_be_bytes());
+        result[16..32].copy_from_slice(&self.1.to_be_bytes());
+        result[32..48].copy_from_slice(&self.2.to_be_bytes());
+        result[48..].copy_from_slice(&self.3.to_be_bytes());
+        result
     }
 }
 

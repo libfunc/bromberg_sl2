@@ -29,12 +29,11 @@ opt-level = 3
 codegen-units = 1
 
 [dependencies]
-digest = { version = "0.10", features = ["alloc"] }
 rayon = { version = "1.8", optional = true }
-serde = { version = "1.0", features = ["derive", "rc"] }
 seq-macro = "^0.3"
 
 [dev-dependencies]
+digest = { version = "0.10", features = ["alloc"] }
 criterion = "0.5"
 num-bigint = "0.4"
 quickcheck = "1.0"

@@ -90,11 +90,6 @@ none of them fulfill these desiderata.
 #[macro_use]
 extern crate alloc;
 
-// Re-export digest traits
-pub use digest::{
-    consts::U64, generic_array::GenericArray, Digest, DynDigest, FixedOutput, Reset, Update,
-};
-
 pub use crate::hash_matrix::{constmatmul, HashMatrix};
 
 use crate::lookup_table::{init_wyde_lookups, BYTE_LOOKUPS, WYDE_LOOKUPS};
@@ -205,22 +200,3 @@ impl<T: BrombergHashable> BrombergHashable for alloc::rc::Rc<T> {
         (**self).bromberg_hash()
     }
 }
-
-impl Update for HashMatrix {
-    fn update(&mut self, data: &[u8]) {
-        *self = *self * data.bromberg_hash();
-    }
-}
-
-impl Reset for HashMatrix {
-    fn reset(&mut self) {
-        *self = I;
-    }
-}
-
-// impl FixedOutputDirty for HashMatrix {
-//     type OutputSize = U64;
-//     fn finalize_into_dirty(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
-//         *out = self.generic_array_digest();
-//     }
-// }
