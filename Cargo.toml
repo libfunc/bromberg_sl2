@@ -1,8 +1,8 @@
 [package]
-name = "bromberg_sl2"
+name = "brsl2"
 description = "Cayley hashing as in 'Navigating in the Cayley Graph of SL₂(𝔽ₚ)'"
 version = "0.7.0"
-authors = ["Ben Weinstein-Raun <root@benwr.net>"]
+authors = ["Ben Weinstein-Raun <root@benwr.net>", "Rail Khusnutdinov <rail@33.run>"]
 edition = "2021"
 license = "CC0-1.0"
 homepage = "https://github.com/libfunc/bromberg_sl2"
